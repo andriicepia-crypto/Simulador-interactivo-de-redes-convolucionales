@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estudio Visual CNN — Con Imágenes Reales y Arquitectura Multicapa</title>
+<style>
+  :root {
+    --bg: #070b14;
+    --surface: #0f172a;
+    --surface-2: #1e293b;
+    --surface-3: #283548;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --cyan: #38bdf8;
+    --emerald: #34d399;
+    --amber: #fbbf24;
+    --purple: #a78bfa;
+    --rose: #fb7185;
+    --border: rgba(148, 163, 184, 0.18);
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: radial-gradient(circle at top center, #111c33 0%, var(--bg) 65%);
+    color: var(--text);
+    margin: 0;
+    padding: 20px;
+    line-height: 1.45;
+  }
+  .container { max-width: 1420px; margin: 0 auto; }
+
+  /* HEADER */
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 24px;
+    margin-bottom: 20px;
+    backdrop-filter: blur(10px);
+  }
+  header h1 {
+    margin: 0;
+    font-size: 1.55rem;
+    background: linear-gradient(90deg, var(--cyan), var(--purple), var(--emerald));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  header p { margin: 4px 0 0 0; color: var(--muted); font-size: 0.9rem; }
+
+  /* BARRA DE CONTROLES */
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 18px;
+    margin-bottom: 20px;
+  }
+  .tool-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 14px;
+    border-right: 1px solid var(--border);
+  }
+  .tool-group:last-child { border-right: none; padding-right: 0; }
+  .tool-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700; }
+
+  button, select, label.file-btn {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 13px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  button:hover, label.file-btn:hover { background: var(--surface-3); border-color: var(--cyan); }
+  button.primary { background: var(--cyan); color: #051324; border: none; }
+  button.primary:hover { background: #7dd3fc; }
+  button.play-active { background: var(--amber); color: #1a1100; border: none; }
+  button.active-pill { background: rgba(56, 189, 248, 0.2); border-color: var(--cyan); color: var(--cyan); }
+  input[type="file"] { display: none; }
+  input[type="range"] { accent-color: var(--cyan); width: 85px; cursor: pointer; }
+
+  /* PIPELINE PRINCIPAL */
+  .pipeline-wrapper {
+    position: relative;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 22px;
+    margin-bottom: 20px;
+  }
+  #connectorSvg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .pipeline-grid {
+    display: grid;
+    grid-template-columns: 270px 1fr 1fr 270px;
+    gap: 22px;
+    position: relative;
+    z-index: 2;
+  }
+  @media (max-width: 1220px) {
+    .pipeline-grid { grid-template-columns: repeat(2, 1fr); }
+    #connectorSvg { display: none; }
+  }
+  @media (max-width: 680px) {
+    .pipeline-grid { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+  }
+  .card-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+  }
+  .badge-in { background: rgba(248,250,252,0.12); color: #fff; }
+  .badge-conv { background: rgba(56,189,248,0.18); color: var(--cyan); }
+  .badge-pool { background: rgba(52,211,153,0.18); color: var(--emerald); }
+  .badge-dense { background: rgba(167,139,250,0.18); color: var(--purple); }
+
+  .card h2 { font-size: 1.02rem; margin: 4px 0; text-align: center; }
+  .card-desc { font-size: 0.78rem; color: var(--muted); text-align: center; margin: 0 0 12px 0; min-height: 34px; }
+
+  canvas.matrix-canvas {
+    background: #020617;
+    border: 2px solid #334155;
+    border-radius: 8px;
+    cursor: crosshair;
+    box-shadow: 0 0 20px rgba(0,0,0,0.6);
+    touch-action: none;
+  }
+
+  /* MULTI-CANAL PARALELO */
+  .channels-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+  .channel-box {
+    background: rgba(2, 6, 23, 0.65);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .channel-box:hover { border-color: var(--cyan); }
+  .channel-box.selected {
+    border-color: var(--amber);
+    background: rgba(251, 191, 36, 0.08);
+    box-shadow: 0 0 12px rgba(251, 191, 36, 0.15);
+  }
+  .channel-info { flex: 1; text-align: left; }
+  .channel-title { font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .channel-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+  .mini-kernel {
+    display: grid;
+    grid-template-columns: repeat(3, 16px);
+    gap: 2px;
+    margin-top: 5px;
+  }
+  .mini-kernel span {
+    font-size: 0.62rem;
+    font-family: monospace;
+    background: var(--surface-2);
+    text-align: center;
+    border-radius: 2px;
+    padding: 1px 0;
+  }
+
+  /* VECTOR FLATTEN Y SALIDA */
+  .flatten-strip {
+    width: 100%;
+    height: 18px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    margin: 8px 0 14px 0;
+  }
+  .pred-list { width: 100%; }
+  .pred-item { margin-bottom: 9px; }
+  .pred-top { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 3px; }
+  .pred-track { width: 100%; height: 10px; background: #020617; border-radius: 99px; overflow: hidden; }
+  .pred-fill { height: 100%; border-radius: 99px; transition: width 0.25s ease; }
+
+  /* PANEL RAYOS X MATEMÁTICOS */
+  .xray-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 22px;
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 980px) { .xray-panel { grid-template-columns: 1fr; } }
+
+  .xray-box {
+    background: rgba(2, 6, 23, 0.65);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .xray-box h3 { margin: 0 0 10px 0; font-size: 0.92rem; color: var(--amber); display: flex; align-items: center; gap: 8px; }
+  .math-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-around;
+    gap: 10px;
+  }
+  .grid-3x3 {
+    display: grid;
+    grid-template-columns: repeat(3, 36px);
+    gap: 3px;
+  }
+  .grid-2x2 {
+    display: grid;
+    grid-template-columns: repeat(2, 42px);
+    gap: 4px;
+  }
+  .m-cell {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 4px;
+    background: var(--surface-2);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .op-symbol { font-size: 1.3rem; font-weight: 800; color: var(--muted); }
+  .result-pill {
+    background: var(--surface-2);
+    border: 1px solid var(--cyan);
+    padding: 8px 14px;
+    border-radius: 10px;
+    text-align: center;
+    font-family: monospace;
+    font-size: 0.82rem;
+  }
+  .result-pill strong { display: block; font-size: 1.1rem; color: var(--cyan); margin-top: 2px; }
+
+  pre.keras-code {
+    margin: 0;
+    background: #020617;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: #a5f3fc;
+    overflow-x: auto;
+    border: 1px solid rgba(56,189,248,0.2);
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div>
+      <h1>Estudio Visual Interactivo de Redes Neuronales Convolucionales (CNN)</h1>
+      <p>Carga fotografías reales, dibuja con el ratón o el dedo, y observa 3 filtros trabajando en paralelo en tiempo real.</p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button id="btnPlay" class="primary" onclick="toggleAnimation()">▶ Iniciar Escáner</button>
+      <button onclick="stepAnimation()">⏭ Paso</button>
+    </div>
+  </header>
+
+  <!-- BARRA DE HERRAMIENTAS -->
+  <div class="toolbar">
+    <div class="tool-group">
+      <span class="tool-label">Imágenes Reales:</span>
+      <button onclick="loadRealSample('cat')">🐱 Gato</button>
+      <button onclick="loadRealSample('car')">🚗 Coche</button>
+      <button onclick="loadRealSample('digit8')">🔢 Dígito 8</button>
+      <button onclick="loadRealSample('house')">🏠 Casa</button>
+      <label class="file-btn">
+        📁 Subir Foto
+        <input type="file" id="imgUpload" accept="image/*" onchange="handleImageUpload(event)">
+      </label>
+    </div>
+
+    <div class="tool-group">
+      <span class="tool-label">Lienzo:</span>
+      <button onclick="clearGrid()">🧹 Limpiar</button>
+      <label style="font-size:0.78rem; color:var(--muted); display:flex; align-items:center; gap:5px; cursor:pointer;">
+        <input type="checkbox" id="chkNumbers" onchange="renderAll()"> Ver valores
+      </label>
+    </div>
+
+    <div class="tool-group">
+      <span class="tool-label">Pooling:</span>
+      <button id="btnMaxPool" class="active-pill" onclick="setPoolMode('max')">Max Pooling</button>
+      <button id="btnAvgPool" onclick="setPoolMode('avg')">Average Pooling</button>
+    </div>
+
+    <div class="tool-group">
+      <span class="tool-label">Velocidad:</span>
+      <input type="range" id="speedRange" min="40" max="450" value="180">
+    </div>
+  </div>
+
+  <!-- FLUJO VISUAL DE LA CNN -->
+  <div class="pipeline-wrapper" id="pipelineWrapper">
+    <svg id="connectorSvg"></svg>
+
+    <div class="pipeline-grid">
+      <!-- ETAPA 1: ENTRADA -->
+      <div class="card" id="cardInput">
+        <div class="card-header">
+          <span class="badge badge-in">Capa 1 • Entrada</span>
+          <span style="font-size:0.75rem; color:var(--muted);">24 × 24 × 1</span>
+        </div>
+        <h2>Imagen en Escala de Grises</h2>
+        <p class="card-desc">Cada píxel es un número entre <strong>0.0</strong> (negro) y <strong>1.0</strong> (blanco). Dibuja encima o sube una foto.</p>
+        <canvas id="canvasInput" class="matrix-canvas" width="240" height="240"></canvas>
+        <div style="margin-top:10px; font-size:0.76rem; color:var(--amber);" id="coordReadout">
+          Ventana activa: Fila 0, Col 0
+        </div>
+      </div>
+
+      <!-- ETAPA 2: CONVOLUCIÓN PARALELA (3 CANALES) -->
+      <div class="card" id="cardConv">
+        <div class="card-header">
+          <span class="badge badge-conv">Capa 2 • Conv2D + ReLU</span>
+          <span style="font-size:0.75rem; color:var(--cyan);">22 × 22 × 3</span>
+        </div>
+        <h2>Mapas de Características</h2>
+        <p class="card-desc">3 filtros distintos escanean la imagen a la vez. Haz clic en un canal para inspeccionar su matemática.</p>
+
+        <div class="channels-stack">
+          <div class="channel-box selected" id="chBox0" onclick="selectChannel(0)">
+            <div class="channel-info">
+              <div class="channel-title" style="color:var(--cyan);">● Filtro 1: Bordes Verticales</div>
+              <div class="channel-sub">Detecta líneas de arriba a abajo</div>
+              <div class="mini-kernel" id="mk0"></div>
+            </div>
+            <canvas id="canvasConv0" class="matrix-canvas" width="88" height="88"></canvas>
+          </div>
+
+          <div class="channel-box" id="chBox1" onclick="selectChannel(1)">
+            <div class="channel-info">
+              <div class="channel-title" style="color:var(--purple);">● Filtro 2: Bordes Horizontales</div>
+              <div class="channel-sub">Detecta líneas de izquierda a derecha</div>
+              <div class="mini-kernel" id="mk1"></div>
+            </div>
+            <canvas id="canvasConv1" class="matrix-canvas" width="88" height="88"></canvas>
+          </div>
+
+          <div class="channel-box" id="chBox2" onclick="selectChannel(2)">
+            <div class="channel-info">
+              <div class="channel-title" style="color:var(--rose);">● Filtro 3: Detección de Contornos</div>
+              <div class="channel-sub">Resalta cambios bruscos de luz</div>
+              <div class="mini-kernel" id="mk2"></div>
+            </div>
+            <canvas id="canvasConv2" class="matrix-canvas" width="88" height="88"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 3: POOLING PARALELO (3 CANALES) -->
+      <div class="card" id="cardPool">
+        <div class="card-header">
+          <span class="badge badge-pool">Capa 3 • Pooling (2×2)</span>
+          <span style="font-size:0.75rem; color:var(--emerald);">11 × 11 × 3</span>
+        </div>
+        <h2>Submuestreo Espacial</h2>
+        <p class="card-desc">Reduce cada mapa a la mitad (<strong>75% menos datos</strong>), conservando los rasgos clave sin importar desplazamientos.</p>
+
+        <div class="channels-stack">
+          <div class="channel-box selected" id="pBox0" onclick="selectChannel(0)">
+            <div class="channel-info">
+              <div class="channel-title" style="color:var(--emerald);">● Mapa Reducido 1</div>
+              <div class="channel-sub">Resumen vertical (11×11)</div>
+            </div>
+            <canvas id="canvasPool0" class="matrix-canvas" width="88" height="88"></canvas>
+          </div>
+
+          <div class="channel-box" id="pBox1" onclick="selectChannel(1)">
+            <div class="channel-info">
+              <div class="channel-title" style="color:var(--emerald);">● Mapa Reducido 2</div>
+              <div class="channel-sub">Resumen horizontal (11×11)</div>
+            </div>
+            <canvas id="canvasPool1" class="matrix-canvas" width="88" height="88"></canvas>
+          </div>
+
+          <div class="channel-box" id="pBox2" onclick="selectChannel(2)">
+            <div class="channel-info">
+              <div class="channel-title" style="color:var(--emerald);">● Mapa Reducido 3</div>
+              <div class="channel-sub">Resumen de contornos (11×11)</div>
+            </div>
+            <canvas id="canvasPool2" class="matrix-canvas" width="88" height="88"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 4: FLATTEN + CLASIFICACIÓN -->
+      <div class="card" id="cardDense">
+        <div class="card-header">
+          <span class="badge badge-dense">Capa 4 • Flatten + Dense</span>
+          <span style="font-size:0.75rem; color:var(--purple);">363 → 4</span>
+        </div>
+        <h2>Decisión Final (Softmax)</h2>
+        <p class="card-desc">Los 3 mapas de 11×11 se estiran en un vector de <strong>363 neuronas</strong> para clasificar la imagen.</p>
+
+        <div style="width:100%; font-size:0.74rem; color:var(--muted); display:flex; justify-content:space-between;">
+          <span>Vector Flatten (363 valores)</span>
+          <span>Activación</span>
+        </div>
+        <canvas id="canvasFlatten" class="flatten-strip" width="236" height="18"></canvas>
+
+        <div class="pred-list" id="predList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL INFERIOR: RAYOS X MATEMÁTICOS + CÓDIGO KERAS -->
+  <div class="xray-panel">
+    <div class="xray-box">
+      <h3>🔬 Rayos X Matemáticos en Vivo — <span id="activeChannelTitle" style="color:var(--cyan);">Filtro 1: Bordes Verticales</span></h3>
+      <div class="math-flow">
+        <div>
+          <div style="font-size:0.72rem; color:var(--muted); text-align:center; margin-bottom:4px;">Parche Entrada (3×3)</div>
+          <div class="grid-3x3" id="xrayPatch"></div>
+        </div>
+
+        <div class="op-symbol">×</div>
+
+        <div>
+          <div style="font-size:0.72rem; color:var(--muted); text-align:center; margin-bottom:4px;">Pesos Kernel (3×3)</div>
+          <div class="grid-3x3" id="xrayKernel"></div>
+        </div>
+
+        <div class="op-symbol">=</div>
+
+        <div class="result-pill">
+          <span>Suma → ReLU</span>
+          <strong id="xrayReluVal">0.00</strong>
+          <span style="font-size:0.68rem; color:var(--muted);" id="xrayRawVal">Bruto: 0.00</span>
+        </div>
+
+        <div class="op-symbol">→</div>
+
+        <div>
+          <div style="font-size:0.72rem; color:var(--muted); text-align:center; margin-bottom:4px;">Bloque Pooling (2×2)</div>
+          <div class="grid-2x2" id="xrayPoolGrid"></div>
+        </div>
+
+        <div class="op-symbol">=</div>
+
+        <div class="result-pill" style="border-color:var(--emerald);">
+          <span id="xrayPoolLabel">Max Pool</span>
+          <strong style="color:var(--emerald);" id="xrayPoolVal">0.00</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="xray-box">
+      <h3 style="color:var(--purple);">💻 Definición Equivalente en Python (TensorFlow / Keras)</h3>
+<pre class="keras-code">model = Sequential([
+  # Capa 2: 3 filtros 3x3 paralelos + activación ReLU
+  Conv2D(filters=3, kernel_size=(3, 3), activation='relu',
+         input_shape=(24, 24, 1)),
+
+  # Capa 3: Reduce dimensiones de 22x22 a 11x11
+  MaxPooling2D(pool_size=(2, 2)),
+
+  # Capa 4: Aplana los 3 mapas (11*11*3 = 363) y clasifica
+  Flatten(),
+  Dense(units=4, activation='softmax')
+])</pre>
+    </div>
+  </div>
+</div>
+
+<script>
+  const IN_SIZE = 24;
+  const CONV_SIZE = IN_SIZE - 2; // 22
+  const POOL_SIZE = CONV_SIZE / 2; // 11
+
+  let inputGrid = Array.from({ length: IN_SIZE }, () => Array(IN_SIZE).fill(0));
+  let convMaps = [null, null, null];
+  let poolMaps = [null, null, null];
+
+  let activeChannel = 0;
+  let poolMode = 'max';
+  let focusRow = 6; // Coordenada en convMap (0..21)
+  let focusCol = 6;
+  let isDrawing = false;
+  let animTimer = null;
+
+  const FILTERS = [
+    {
+      name: 'Filtro 1: Bordes Verticales',
+      color: '56, 189, 248',
+      hex: '#38bdf8',
+      kernel: [
+        [-1, 0, 1],
+        [-2, 0, 2],
+        [-1, 0, 1]
+      ],
+      div: 4
+    },
+    {
+      name: 'Filtro 2: Bordes Horizontales',
+      color: '167, 139, 250',
+      hex: '#a78bfa',
+      kernel: [
+        [-1, -2, -1],
+        [ 0,  0,  0],
+        [ 1,  2,  1]
+      ],
+      div: 4
+    },
+    {
+      name: 'Filtro 3: Detección de Contornos',
+      color: '251, 113, 133',
+      hex: '#fb7185',
+      kernel: [
+        [-1, -1, -1],
+        [-1,  8, -1],
+        [-1, -1, -1]
+      ],
+      div: 4
+    }
+  ];
+
+  // Inicializar mini-kernels en tarjetas
+  function initMiniKernels() {
+    FILTERS.forEach((f, idx) => {
+      const el = document.getElementById('mk' + idx);
+      el.innerHTML = f.kernel.flat().map(v => `<span>${v > 0 ? '+'+v : v}</span>`).join('');
+    });
+  }
+
+  // Generador procedural de fotografías/objetos realistas en escala de grises 24x24
+  function loadRealSample(type) {
+    stopAnimation();
+    const off = document.createElement('canvas');
+    off.width = IN_SIZE;
+    off.height = IN_SIZE;
+    const ctx = off.getContext('2d');
+
+    ctx.fillStyle = '#080c14';
+    ctx.fillRect(0, 0, IN_SIZE, IN_SIZE);
+
+    if (type === 'cat') {
+      // Fondo suave
+      const grad = ctx.createRadialGradient(12, 13, 2, 12, 13, 14);
+      grad.addColorStop(0, '#334155');
+      grad.addColorStop(1, '#090d16');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, IN_SIZE, IN_SIZE);
+
+      // Orejas triangulares
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath(); ctx.moveTo(4, 10); ctx.lineTo(6, 2); ctx.lineTo(10, 8); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(20, 10); ctx.lineTo(18, 2); ctx.lineTo(14, 8); ctx.fill();
+
+      // Cabeza redondeada con sombreado
+      const headGrad = ctx.createRadialGradient(11, 12, 2, 12, 13, 9);
+      headGrad.addColorStop(0, '#f8fafc');
+      headGrad.addColorStop(0.7, '#94a3b8');
+      headGrad.addColorStop(1, '#475569');
+      ctx.fillStyle = headGrad;
+      ctx.beginPath(); ctx.ellipse(12, 14, 8, 7, 0, 0, Math.PI * 2); ctx.fill();
+
+      // Ojos oscuros y pupilas brillantes
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(8, 12, 2, 2);
+      ctx.fillRect(14, 12, 2, 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(8, 12, 1, 1);
+      ctx.fillRect(14, 12, 1, 1);
+
+      // Nariz y bigotes
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(11, 15, 2, 1);
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(2, 15); ctx.lineTo(7, 15);
+      ctx.moveTo(17, 15); ctx.lineTo(22, 15);
+      ctx.stroke();
+
+    } else if (type === 'car') {
+      // Cielo y carretera
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, 0, IN_SIZE, 17);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 17, IN_SIZE, 7);
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(0, 17, IN_SIZE, 1);
+
+      // Carrocería metálica
+      const bodyGrad = ctx.createLinearGradient(0, 8, 0, 17);
+      bodyGrad.addColorStop(0, '#f8fafc');
+      bodyGrad.addColorStop(1, '#64748b');
+      ctx.fillStyle = bodyGrad;
+      ctx.fillRect(3, 12, 18, 5);
+      ctx.fillRect(6, 8, 11, 4);
+
+      // Ventanas oscuras
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(7, 9, 4, 3);
+      ctx.fillRect(12, 9, 4, 3);
+
+      // Ruedas y llantas
+      ctx.fillStyle = '#020617';
+      ctx.beginPath(); ctx.arc(7, 17, 2.6, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(17, 17, 2.6, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(6, 16, 2, 2);
+      ctx.fillRect(16, 16, 2, 2);
+
+    } else if (type === 'digit8') {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, IN_SIZE, IN_SIZE);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath(); ctx.arc(12, 7.5, 4.2, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(12, 16.2, 4.8, 0, Math.PI*2); ctx.stroke();
+
+    } else if (type === 'house') {
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, IN_SIZE, IN_SIZE);
+      // Tejado
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath(); ctx.moveTo(3, 11); ctx.lineTo(12, 3); ctx.lineTo(21, 11); ctx.closePath(); ctx.fill();
+      // Fachada
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(5, 11, 14, 10);
+      // Puerta y ventana
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(10, 15, 4, 6);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(7, 13, 2, 2);
+      ctx.fillRect(15, 13, 2, 2);
+    }
+
+    extractImageToGrid(ctx);
+  }
+
+  function handleImageUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    stopAnimation();
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      const img = new Image();
+      img.onload = function() {
+        const off = document.createElement('canvas');
+        off.width = IN_SIZE;
+        off.height = IN_SIZE;
+        const ctx = off.getContext('2d');
+        // Recorte cuadrado centrado
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2;
+        const sy = (img.height - side) / 2;
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, IN_SIZE, IN_SIZE);
+        extractImageToGrid(ctx);
+      };
+      img.src = evt.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function extractImageToGrid(ctx) {
+    const imgData = ctx.getImageData(0, 0, IN_SIZE, IN_SIZE).data;
+    for (let y = 0; y < IN_SIZE; y++) {
+      for (let x = 0; x < IN_SIZE; x++) {
+        const idx = (y * IN_SIZE + x) * 4;
+        // Luminancia perceptual
+        const lum = (0.299 * imgData[idx] + 0.587 * imgData[idx+1] + 0.114 * imgData[idx+2]) / 255;
+        inputGrid[y][x] = Number(lum.toFixed(2));
+      }
+    }
+    computeCNN();
+  }
+
+  function clearGrid() {
+    stopAnimation();
+    inputGrid = Array.from({ length: IN_SIZE }, () => Array(IN_SIZE).fill(0));
+    computeCNN();
+  }
+
+  function setPoolMode(mode) {
+    poolMode = mode;
+    document.getElementById('btnMaxPool').classList.toggle('active-pill', mode === 'max');
+    document.getElementById('btnAvgPool').classList.toggle('active-pill', mode === 'avg');
+    computeCNN();
+  }
+
+  function selectChannel(idx) {
+    activeChannel = idx;
+    for (let i = 0; i < 3; i++) {
+      document.getElementById('chBox' + i).classList.toggle('selected', i === idx);
+      document.getElementById('pBox' + i).classList.toggle('selected', i === idx);
+    }
+    renderAll();
+  }
+
+  // CÁLCULO DE LA CNN
+  function computeCNN() {
+    for (let c = 0; c < 3; c++) {
+      const kernel = FILTERS[c].kernel;
+      const div = FILTERS[c].div;
+      let cMap = Array.from({ length: CONV_SIZE }, () => Array(CONV_SIZE).fill(0));
+
+      for (let y = 0; y < CONV_SIZE; y++) {
+        for (let x = 0; x < CONV_SIZE; x++) {
+          let sum = 0;
+          for (let ky = 0; ky < 3; ky++) {
+            for (let kx = 0; kx < 3; kx++) {
+              sum += inputGrid[y + ky][x + kx] * kernel[ky][kx];
+            }
+          }
+          // ReLU
+          cMap[y][x] = Math.max(0, sum / div);
+        }
+      }
+      convMaps[c] = cMap;
+
+      let pMap = Array.from({ length: POOL_SIZE }, () => Array(POOL_SIZE).fill(0));
+      for (let y = 0; y < POOL_SIZE; y++) {
+        for (let x = 0; x < POOL_SIZE; x++) {
+          const vals = [
+            cMap[y * 2][x * 2],
+            cMap[y * 2][x * 2 + 1],
+            cMap[y * 2 + 1][x * 2],
+            cMap[y * 2 + 1][x * 2 + 1]
+          ];
+          pMap[y][x] = poolMode === 'max'
+            ? Math.max(...vals)
+            : vals.reduce((a, b) => a + b, 0) / 4;
+        }
+      }
+      poolMaps[c] = pMap;
+    }
+    renderAll();
+  }
+
+  // RENDERIZADO DE MATRICES
+  function drawMatrix(canvasId, matrix, rgbColor, highlightRect, showNums) {
+    const canvas = document.getElementById(canvasId);
+    const ctx = canvas.getContext('2d');
+    const rows = matrix.length;
+    const cols = matrix[0].length;
+    const cellW = canvas.width / cols;
+    const cellH = canvas.height / rows;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const val = Math.min(1, Math.max(0, matrix[y][x]));
+        ctx.fillStyle = `rgba(${rgbColor}, ${val})`;
+        ctx.fillRect(x * cellW, y * cellH, cellW, cellH);
+
+        if (cellW >= 8) {
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.14)';
+          ctx.lineWidth = 0.6;
+          ctx.strokeRect(x * cellW, y * cellH, cellW, cellH);
+        }
+
+        if (showNums && cellW >= 10) {
+          ctx.fillStyle = val > 0.55 ? '#020617' : '#e2e8f0';
+          ctx.font = 'bold 6.5px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(val.toFixed(1).replace('0.', '.'), x * cellW + cellW/2, y * cellH + cellH/2);
+        }
+      }
+    }
+
+    if (highlightRect) {
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        highlightRect.x * cellW,
+        highlightRect.y * cellH,
+        highlightRect.w * cellW,
+        highlightRect.h * cellH
+      );
+    }
+  }
+
+  function renderAll() {
+    const showNums = document.getElementById('chkNumbers').checked;
+
+    // 1. Entrada (ventana 3x3 en focusRow, focusCol)
+    drawMatrix('canvasInput', inputGrid, '255, 255, 255', { x: focusCol, y: focusRow, w: 3, h: 3 }, showNums);
+    document.getElementById('coordReadout').textContent = `Ventana activa: Fila ${focusRow}, Col ${focusCol} (Bloque 3×3)`;
+
+    // 2. Mapas Convolución (ventana 2x2 alineada al bloque de pooling)
+    const pRow = Math.floor(focusRow / 2);
+    const pCol = Math.floor(focusCol / 2);
+    for (let c = 0; c < 3; c++) {
+      drawMatrix(
+        'canvasConv' + c,
+        convMaps[c],
+        FILTERS[c].color,
+        c === activeChannel ? { x: pCol * 2, y: pRow * 2, w: 2, h: 2 } : null,
+        false
+      );
+      drawMatrix(
+        'canvasPool' + c,
+        poolMaps[c],
+        '52, 211, 153',
+        c === activeChannel ? { x: pCol, y: pRow, w: 1, h: 1 } : null,
+        false
+      );
+    }
+
+    renderFlattenAndPredictions();
+    renderXRayMath(pRow, pCol);
+    drawConnectors();
+  }
+
+  function renderFlattenAndPredictions() {
+    // Tira Flatten de 363 valores (3 * 11 * 11)
+    const fCanvas = document.getElementById('canvasFlatten');
+    const fCtx = fCanvas.getContext('2d');
+    fCtx.clearRect(0, 0, fCanvas.width, fCanvas.height);
+
+    const flatVals = [];
+    for (let c = 0; c < 3; c++) {
+      for (let y = 0; y < POOL_SIZE; y++) {
+        for (let x = 0; x < POOL_SIZE; x++) {
+          flatVals.push({ val: poolMaps[c][y][x], color: FILTERS[c].color });
+        }
+      }
+    }
+    const barW = fCanvas.width / flatVals.length;
+    flatVals.forEach((item, i) => {
+      fCtx.fillStyle = `rgba(${item.color}, ${Math.min(1, item.val * 1.4)})`;
+      fCtx.fillRect(i * barW, 0, Math.ceil(barW), fCanvas.height);
+    });
+
+    // Heurística visual de clasificación basada en firmas espaciales de los 3 mapas
+    const sumV = poolMaps[0].flat().reduce((a,b)=>a+b, 0);
+    const sumH = poolMaps[1].flat().reduce((a,b)=>a+b, 0);
+    const sumE = poolMaps[2].flat().reduce((a,b)=>a+b, 0);
+    const topHalf = inputGrid.slice(0, 10).flat().reduce((a,b)=>a+b, 0);
+    const botHalf = inputGrid.slice(12, 22).flat().reduce((a,b)=>a+b, 0);
+    const totalLum = topHalf + botHalf;
+
+    let scores = [1.0, 1.0, 1.0, 1.0]; // [Gato, Coche, Dígito 8, Casa]
+    if (totalLum > 5) {
+      // Coche tiene mucha energía horizontal en la mitad inferior
+      scores[1] += (sumH / (sumV + 1)) * 2.2 + (botHalf > topHalf * 1.3 ? 1.8 : 0);
+      // Gato tiene masa centrada arriba y bordes diagonales/orejas
+      scores[0] += (sumE / 12) + (topHalf > botHalf * 0.9 ? 1.5 : 0);
+      // Dígito 8 tiene simetría vertical/horizontal muy alta en fondo oscuro
+      scores[2] += (totalLum < 95 && Math.abs(sumV - sumH) < 8 ? 2.8 : 0.4);
+      // Casa tiene pico triangular superior y base rectangular
+      scores[3] += (sumV * 0.08) + (botHalf > topHalf * 1.1 ? 1.4 : 0);
+    }
+
+    // Softmax
+    const maxS = Math.max(...scores);
+    const exps = scores.map(s => Math.exp(s - maxS));
+    const sumExp = exps.reduce((a, b) => a + b, 0);
+    const probs = exps.map(e => Math.round((e / sumExp) * 100));
+
+    const labels = [
+      { name: '🐱 Gato / Animal', color: '#38bdf8' },
+      { name: '🚗 Vehículo', color: '#a78bfa' },
+      { name: '🔢 Dígito Manuscrito', color: '#34d399' },
+      { name: '🏠 Casa / Edificio', color: '#fbbf24' }
+    ];
+
+    document.getElementById('predList').innerHTML = labels.map((lbl, i) => `
+      <div class="pred-item">
+        <div class="pred-top">
+          <span>${lbl.name}</span>
+          <strong style="color:${lbl.color};">${probs[i]}%</strong>
+        </div>
+        <div class="pred-track">
+          <div class="pred-fill" style="width:${probs[i]}%; background:${lbl.color};"></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderXRayMath(pRow, pCol) {
+    const f = FILTERS[activeChannel];
+    document.getElementById('activeChannelTitle').textContent = f.name;
+    document.getElementById('activeChannelTitle').style.color = f.hex;
+
+    let patchHTML = '';
+    let kernelHTML = '';
+    let rawSum = 0;
+
+    for (let ky = 0; ky < 3; ky++) {
+      for (let kx = 0; kx < 3; kx++) {
+        const pVal = inputGrid[focusRow + ky][focusCol + kx];
+        const kVal = f.kernel[ky][kx];
+        rawSum += pVal * kVal;
+
+        const bgAlpha = Math.min(0.85, pVal * 0.85);
+        patchHTML += `<div class="m-cell" style="background:rgba(255,255,255,${bgAlpha}); color:${pVal > 0.5 ? '#020617' : '#fff'};">${pVal.toFixed(2)}</div>`;
+        kernelHTML += `<div class="m-cell" style="color:${kVal > 0 ? '#34d399' : (kVal < 0 ? '#fb7185' : '#94a3b8')};">${kVal > 0 ? '+'+kVal : kVal}</div>`;
+      }
+    }
+
+    const scaledRaw = rawSum / f.div;
+    const afterRelu = Math.max(0, scaledRaw);
+
+    document.getElementById('xrayPatch').innerHTML = patchHTML;
+    document.getElementById('xrayKernel').innerHTML = kernelHTML;
+    document.getElementById('xrayRawVal').textContent = `Bruto: ${scaledRaw.toFixed(2)}`;
+    document.getElementById('xrayReluVal').textContent = afterRelu.toFixed(2);
+
+    // Bloque 2x2 de pooling
+    const cMap = convMaps[activeChannel];
+    const pVals = [
+      cMap[pRow * 2][pCol * 2],
+      cMap[pRow * 2][pCol * 2 + 1],
+      cMap[pRow * 2 + 1][pCol * 2],
+      cMap[pRow * 2 + 1][pCol * 2 + 1]
+    ];
+    const pooledVal = poolMaps[activeChannel][pRow][pCol];
+
+    document.getElementById('xrayPoolGrid').innerHTML = pVals.map(v => {
+      const isWinner = poolMode === 'max' && Math.abs(v - pooledVal) < 0.001 && v > 0;
+      return `<div class="m-cell" style="border-color:${isWinner ? '#34d399' : 'rgba(255,255,255,0.1)'}; color:${isWinner ? '#34d399' : '#e2e8f0'};">${v.toFixed(2)}</div>`;
+    }).join('');
+
+    document.getElementById('xrayPoolLabel').textContent = poolMode === 'max' ? 'Max Pool' : 'Avg Pool';
+    document.getElementById('xrayPoolVal').textContent = pooledVal.toFixed(2);
+  }
+
+  // LÍNEAS SVG CONECTORAS ENTRE CAPAS
+  function drawConnectors() {
+    const svg = document.getElementById('connectorSvg');
+    const wrapper = document.getElementById('pipelineWrapper').getBoundingClientRect();
+    if (wrapper.width < 1180) { svg.innerHTML = ''; return; }
+
+    const inCanvas = document.getElementById('canvasInput').getBoundingClientRect();
+    const convCanvas = document.getElementById('canvasConv' + activeChannel).getBoundingClientRect();
+    const poolCanvas = document.getElementById('canvasPool' + activeChannel).getBoundingClientRect();
+    const flatCanvas = document.getElementById('canvasFlatten').getBoundingClientRect();
+
+    const cellIn = inCanvas.width / IN_SIZE;
+    const x1 = (inCanvas.left - wrapper.left) + (focusCol + 3) * cellIn;
+    const y1Top = (inCanvas.top - wrapper.top) + focusRow * cellIn;
+    const y1Bot = y1Top + 3 * cellIn;
+
+    const cellConv = convCanvas.width / CONV_SIZE;
+    const x2 = (convCanvas.left - wrapper.left) + focusCol * cellConv;
+    const y2 = (convCanvas.top - wrapper.top) + (focusRow + 0.5) * cellConv;
+
+    const pRow = Math.floor(focusRow / 2);
+    const pCol = Math.floor(focusCol / 2);
+    const x2Right = (convCanvas.left - wrapper.left) + (pCol * 2 + 2) * cellConv;
+    const y2PoolTop = (convCanvas.top - wrapper.top) + (pRow * 2) * cellConv;
+    const y2PoolBot = y2PoolTop + 2 * cellConv;
+
+    const cellPool = poolCanvas.width / POOL_SIZE;
+    const x3 = (poolCanvas.left - wrapper.left) + pCol * cellPool;
+    const y3 = (poolCanvas.top - wrapper.top) + (pRow + 0.5) * cellPool;
+
+    const x3Right = (poolCanvas.left - wrapper.left) + poolCanvas.width;
+    const y3Mid = (poolCanvas.top - wrapper.top) + poolCanvas.height / 2;
+    const x4 = (flatCanvas.left - wrapper.left);
+    const y4 = (flatCanvas.top - wrapper.top) + flatCanvas.height / 2;
+
+    svg.innerHTML = `
+      <polygon points="${x1},${y1Top} ${x2},${y2} ${x1},${y1Bot}" fill="rgba(251, 191, 36, 0.16)" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="3,2"/>
+      <polygon points="${x2Right},${y2PoolTop} ${x3},${y3} ${x2Right},${y2PoolBot}" fill="rgba(52, 211, 153, 0.16)" stroke="#34d399" stroke-width="1.2" stroke-dasharray="3,2"/>
+      <path d="M ${x3Right} ${y3Mid} C ${x3Right + 30} ${y3Mid}, ${x4 - 30} ${y4}, ${x4} ${y4}" fill="none" stroke="rgba(167, 139, 250, 0.55)" stroke-width="2" stroke-dasharray="4,3"/>
+    `;
+  }
+
+  // INTERACCIÓN CON RATÓN / TÁCTIL
+  const canvasInput = document.getElementById('canvasInput');
+  function handlePointer(e, paint) {
+    const rect = canvasInput.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const x = Math.floor(((clientX - rect.left) / rect.width) * IN_SIZE);
+    const y = Math.floor(((clientY - rect.top) / rect.height) * IN_SIZE);
+
+    if (x >= 0 && x < IN_SIZE && y >= 0 && y < IN_SIZE) {
+      focusRow = Math.min(CONV_SIZE - 1, Math.max(0, y - 1));
+      focusCol = Math.min(CONV_SIZE - 1, Math.max(0, x - 1));
+      if (paint) {
+        inputGrid[y][x] = 1.0;
+        if (x + 1 < IN_SIZE) inputGrid[y][x+1] = Math.max(inputGrid[y][x+1], 0.55);
+        if (y + 1 < IN_SIZE) inputGrid[y+1][x] = Math.max(inputGrid[y+1][x], 0.55);
+        computeCNN();
+      } else {
+        renderAll();
+      }
+    }
+  }
+
+  canvasInput.addEventListener('mousedown', e => { isDrawing = true; handlePointer(e, true); });
+  canvasInput.addEventListener('mousemove', e => { handlePointer(e, isDrawing); });
+  window.addEventListener('mouseup', () => { isDrawing = false; });
+
+  canvasInput.addEventListener('touchstart', e => { e.preventDefault(); isDrawing = true; handlePointer(e, true); }, { passive: false });
+  canvasInput.addEventListener('touchmove', e => { e.preventDefault(); handlePointer(e, true); }, { passive: false });
+  window.addEventListener('touchend', () => { isDrawing = false; });
+
+  // Inspección directa en mapas de convolución
+  for (let c = 0; c < 3; c++) {
+    const cEl = document.getElementById('canvasConv' + c);
+    cEl.addEventListener('mousemove', e => {
+      if (animTimer) return;
+      const rect = cEl.getBoundingClientRect();
+      const x = Math.floor(((e.clientX - rect.left) / rect.width) * CONV_SIZE);
+      const y = Math.floor(((e.clientY - rect.top) / rect.height) * CONV_SIZE);
+      if (x >= 0 && x < CONV_SIZE && y >= 0 && y < CONV_SIZE) {
+        if (activeChannel !== c) selectChannel(c);
+        focusRow = y;
+        focusCol = x;
+        renderAll();
+      }
+    });
+  }
+
+  // ANIMACIÓN ESCÁNER
+  function stepAnimation() {
+    focusCol += 2;
+    if (focusCol >= CONV_SIZE) {
+      focusCol = 0;
+      focusRow += 2;
+      if (focusRow >= CONV_SIZE) focusRow = 0;
+    }
+    renderAll();
+  }
+
+  function toggleAnimation() {
+    const btn = document.getElementById('btnPlay');
+    if (animTimer) {
+      stopAnimation();
+    } else {
+      btn.textContent = '⏸ Pausar Escáner';
+      btn.classList.remove('primary');
+      btn.classList.add('play-active');
+      const runStep = () => {
+        stepAnimation();
+        const delay = 500 - parseInt(document.getElementById('speedRange').value, 10);
+        animTimer = setTimeout(runStep, delay);
+      };
+      runStep();
+    }
+  }
+
+  function stopAnimation() {
+    if (animTimer) {
+      clearTimeout(animTimer);
+      animTimer = null;
+    }
+    const btn = document.getElementById('btnPlay');
+    btn.textContent = '▶ Iniciar Escáner';
+    btn.classList.add('primary');
+    btn.classList.remove('play-active');
+  }
+
+  window.addEventListener('resize', drawConnectors);
+
+  // Arranque inicial
+  initMiniKernels();
+  loadRealSample('cat');
+</script>
+</body>
+</html>
