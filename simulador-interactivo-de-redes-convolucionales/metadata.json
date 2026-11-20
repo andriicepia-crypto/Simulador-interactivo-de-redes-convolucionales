@@ -1,5 +1,5 @@
 {
-  "name": "ConvLab — Simulador Interactivo de Redes Convolucionales",
+  "name": "Simulador Interactivo de Redes Convolucionales",
   "description": "Aplicación educativa interactiva para comprender cómo funcionan las Redes Neuronales Convolucionales (CNN) mediante simulaciones visuales paso a paso de kernels, ReLU, Max Pooling y clasificación.",
   "requestFramePermissions": [],
   "majorCapabilities": []
